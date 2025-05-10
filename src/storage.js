@@ -1,4 +1,3 @@
-// src/storage.js
 const KEY = "puzzle_progress";
 
 export function getProgress() {

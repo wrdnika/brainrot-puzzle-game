@@ -1,65 +1,107 @@
-// src/level.js
 import { Howl } from "howler";
 import { unlockLevel } from "./storage.js";
 import { renderLevelList } from "./levelList.js";
 
-const SIZE = 3; // ukuran grid 3×3
+const SIZE = 3;
 const TILE_COUNT = SIZE * SIZE;
+
+let audioContext;
+let audioInitialized = false;
+
+function initAudio() {
+  if (audioInitialized) return true;
+
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+
+    audioInitialized = true;
+    return true;
+  } catch (e) {
+    console.error("Audio initialization failed:", e);
+    return false;
+  }
+}
+
+function setupMobileAudio(sound) {
+  const unlockAudio = () => {
+    if (!audioInitialized) {
+      initAudio();
+    }
+
+    if (sound && typeof sound.play === "function") {
+      sound.play();
+    }
+
+    ["touchstart", "touchend", "click", "keydown"].forEach((event) => {
+      document.removeEventListener(event, unlockAudio, true);
+    });
+  };
+
+  ["touchstart", "touchend", "click", "keydown"].forEach((event) => {
+    document.addEventListener(event, unlockAudio, true);
+  });
+
+  return sound;
+}
 
 export function renderLevel(n, container) {
   container.innerHTML = "";
 
-  // ─── BACKGROUND SOUND ──────────────────────────────────
+  initAudio();
+
   const sound = new Howl({
     src: [`/src/assets/sounds/level${n}.mp3`],
     loop: true,
+    html5: true,
+    preload: true,
+    volume: 0.8,
+    onloaderror: function (id, err) {
+      console.error(`Sound loading error: ${err}`);
+    },
   });
-  sound.play();
 
-  // ─── HEADER ────────────────────────────────────────────
+  setupMobileAudio(sound);
+
   const header = document.createElement("div");
   header.className = "flex justify-between items-center mb-4";
   header.innerHTML = `
     <h2 class="text-xl font-semibold">Level ${n}</h2>
     <div>
-      <button id="restartBtn" class="px-3 py-1 bg-yellow-400 rounded mr-2">Restart</button>
-      <button id="backBtn" class="px-3 py-1 bg-gray-300 rounded">Back</button>
+      <button id="restartBtn" class="text-black hover:text-white bg-yellow-400 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Restart</button>
+      <button id="backBtn" class="text-black hover:text-white bg-gray-200 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Back</button>
     </div>`;
   container.appendChild(header);
 
-  // ─── PREVIEW IMAGE (MINI) ────────────────────────────────
-  const previewContainer = document.createElement("div");
-  previewContainer.className = "flex justify-center mb-4";
+  const mainGameContainer = document.createElement("div");
+  mainGameContainer.className = "flex justify-center items-start gap-4 mb-4";
+  container.appendChild(mainGameContainer);
 
   const previewImg = document.createElement("img");
   previewImg.src = `/images/level${n}.png`;
   previewImg.alt = `Puzzle Level ${n}`;
   previewImg.className =
-    "w-32 h-32 object-cover rounded shadow-md border-2 border-gray-300";
-  previewContainer.appendChild(previewImg);
-  container.appendChild(previewContainer);
+    "w-36 h-36 object-cover rounded shadow-md border-2 border-gray-300";
+  mainGameContainer.appendChild(previewImg);
 
-  // ─── GRID CONTAINER ───────────────────────────────────
   const grid = document.createElement("div");
   grid.id = "puzzleGrid";
   grid.className =
-    "grid grid-cols-3 gap-1 mx-auto w-72 h-72 border-2 border-gray-600 rounded p-1 bg-gray-800";
-  container.appendChild(grid);
+    "grid grid-cols-3 gap-1 w-80 h-80 border-2 border-gray-600 rounded p-1 bg-gray-800";
+  mainGameContainer.appendChild(grid);
 
-  // Definisikan tiles di sini agar bisa diakses oleh semua fungsi dalam renderLevel
   let tiles = Array.from({ length: TILE_COUNT }, (_, i) => i);
 
-  // ─── PRELOAD IMAGE FOR TILES ─────────────────────────
   const fullImage = new Image();
   fullImage.src = `/images/level${n}.png`;
   fullImage.onload = () => {
-    // ─── SETUP TILES ───────────────────────────────────────
     shuffle(tiles);
     renderImageTiles(tiles, grid, fullImage, n);
 
-    // Make sure puzzle is solvable
     if (!isSolvable(tiles)) {
-      // If not solvable, swap any two non-empty tiles
       const idx1 = tiles.findIndex((t) => t !== 0);
       const idx2 = tiles.findIndex((t, i) => t !== 0 && i !== idx1);
       [tiles[idx1], tiles[idx2]] = [tiles[idx2], tiles[idx1]];
@@ -67,9 +109,7 @@ export function renderLevel(n, container) {
     }
   };
 
-  // ─── EVENT LISTENERS ───────────────────────────────────
   grid.addEventListener("click", (e) => {
-    // Find the closest tile if the click is on a child element
     const tile = e.target.closest("[data-idx]");
     if (!tile) return;
 
@@ -78,29 +118,31 @@ export function renderLevel(n, container) {
 
     const emptyIdx = tiles.indexOf(0);
     if (isNeighbor(idx, emptyIdx)) {
-      // Play move sound (if exists)
       try {
         const moveSound = new Howl({
           src: ["/src/assets/sounds/move.mp3"],
           volume: 0.5,
+          html5: true,
         });
-        moveSound.play();
+
+        if (audioInitialized) {
+          moveSound.play();
+        } else {
+          setupMobileAudio(moveSound);
+        }
       } catch (error) {
         console.log("Move sound not available");
       }
 
-      // Swap tiles
       [tiles[idx], tiles[emptyIdx]] = [tiles[emptyIdx], tiles[idx]];
       renderImageTiles(tiles, grid, fullImage, n);
 
-      // Check if solved
       if (isSolved(tiles)) onSolved();
     }
   });
 
   document.getElementById("restartBtn").addEventListener("click", () => {
     shuffle(tiles);
-    // Ensure puzzle is solvable after shuffle
     if (!isSolvable(tiles)) {
       const idx1 = tiles.findIndex((t) => t !== 0);
       const idx2 = tiles.findIndex((t, i) => t !== 0 && i !== idx1);
@@ -112,17 +154,19 @@ export function renderLevel(n, container) {
   document.getElementById("backBtn").addEventListener("click", () => {
     sound.stop();
     container.innerHTML = "";
+
     const lvlContainer = document.createElement("div");
     lvlContainer.className = "flex flex-wrap justify-center";
     container.appendChild(lvlContainer);
+
+    window.location.hash = "";
+
     renderLevelList(lvlContainer);
   });
 
-  // ─── HELPERS ───────────────────────────────────────────
   function onSolved() {
     sound.stop();
 
-    // Show complete image with celebration effect
     const celebrationOverlay = document.createElement("div");
     celebrationOverlay.className =
       "fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50";
@@ -149,10 +193,8 @@ export function renderLevel(n, container) {
     continueBtn.addEventListener("click", () => {
       document.body.removeChild(celebrationOverlay);
 
-      // Unlock next level
       if (n < 10) unlockLevel(n + 1);
 
-      // Back to level list
       container.innerHTML = "";
       const lvlContainer = document.createElement("div");
       lvlContainer.className = "flex flex-wrap justify-center";
@@ -162,7 +204,6 @@ export function renderLevel(n, container) {
   }
 }
 
-// Fisher–Yates shuffle
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -170,9 +211,7 @@ function shuffle(arr) {
   }
 }
 
-// Check if the puzzle is solvable
 function isSolvable(tiles) {
-  // Count inversions
   let inversions = 0;
   for (let i = 0; i < tiles.length; i++) {
     if (tiles[i] === 0) continue;
@@ -182,9 +221,6 @@ function isSolvable(tiles) {
     }
   }
 
-  // For 3x3 puzzles with blank at position N from the end, the puzzle is solvable if:
-  // - N is odd and inversions is even, or
-  // - N is even and inversions is odd
   const blankPosition = tiles.indexOf(0);
   const blankRow = Math.floor(blankPosition / SIZE);
   const N = SIZE - blankRow;
@@ -195,7 +231,6 @@ function isSolvable(tiles) {
   );
 }
 
-// render tiap tile sebagai potongan gambar
 function renderImageTiles(tiles, grid, fullImage, levelNum) {
   grid.innerHTML = "";
   const tileSize = fullImage.width / SIZE;
@@ -203,26 +238,21 @@ function renderImageTiles(tiles, grid, fullImage, levelNum) {
   tiles.forEach((val, i) => {
     const tile = document.createElement("div");
 
-    // Position in the grid
     const gridX = i % SIZE;
     const gridY = Math.floor(i / SIZE);
 
     if (val === 0) {
-      // Empty tile
       tile.className = "w-full h-full bg-gray-200 rounded";
     } else {
-      // Image tile
       const tileCanvas = document.createElement("canvas");
       tileCanvas.width = tileSize;
       tileCanvas.height = tileSize;
 
       const ctx = tileCanvas.getContext("2d");
 
-      // Calculate position in original image
       const srcX = ((val - 1) % SIZE) * tileSize;
       const srcY = Math.floor((val - 1) / SIZE) * tileSize;
 
-      // Draw piece of the image
       ctx.drawImage(
         fullImage,
         srcX,
@@ -235,7 +265,6 @@ function renderImageTiles(tiles, grid, fullImage, levelNum) {
         tileSize
       );
 
-      // Add border to image
       ctx.strokeStyle = "#FFFFFF";
       ctx.lineWidth = 2;
       ctx.strokeRect(0, 0, tileSize, tileSize);
@@ -246,7 +275,6 @@ function renderImageTiles(tiles, grid, fullImage, levelNum) {
         "w-full h-full cursor-pointer rounded shadow transition-transform hover:scale-105";
     }
 
-    // Common properties
     tile.style.width = "100%";
     tile.style.height = "100%";
     tile.dataset.idx = i;
@@ -256,7 +284,6 @@ function renderImageTiles(tiles, grid, fullImage, levelNum) {
   });
 }
 
-// cek neighbor (bergerak hanya ke posisi kosong)
 function isNeighbor(idx, emptyIdx) {
   const x1 = idx % SIZE,
     y1 = Math.floor(idx / SIZE);
@@ -267,7 +294,6 @@ function isNeighbor(idx, emptyIdx) {
   return dx + dy === 1;
 }
 
-// cek solved (urut 1…8, then 0)
 function isSolved(tiles) {
   for (let i = 0; i < TILE_COUNT - 1; i++) {
     if (tiles[i] !== i + 1) return false;
