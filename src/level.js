@@ -5,55 +5,66 @@ import { renderLevelList } from "./levelList.js";
 const SIZE = 3;
 const TILE_COUNT = SIZE * SIZE;
 
-let audioContext;
-let audioInitialized = false;
+let backgroundSound = null;
+let audioUnlocked = false;
 
-function initAudio() {
-  if (audioInitialized) return true;
+function initAudioForMobile() {
+  if (audioUnlocked) return;
 
-  try {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-    if (audioContext.state === "suspended") {
-      audioContext.resume();
-    }
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  gainNode.gain.value = 0;
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
 
-    audioInitialized = true;
-    return true;
-  } catch (e) {
-    console.error("Audio initialization failed:", e);
-    return false;
+  oscillator.start(0);
+  oscillator.stop(0.001);
+
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
+  }
+
+  audioUnlocked = true;
+  console.log("Audio unlocked for mobile!");
+
+  if (backgroundSound) {
+    backgroundSound.play();
   }
 }
 
-function setupMobileAudio(sound) {
+function setupAudioUnlock() {
+  const unlockEvents = ["touchstart", "touchend", "mousedown", "keydown"];
+
   const unlockAudio = () => {
-    if (!audioInitialized) {
-      initAudio();
-    }
+    initAudioForMobile();
 
-    if (sound && typeof sound.play === "function") {
-      sound.play();
-    }
-
-    ["touchstart", "touchend", "click", "keydown"].forEach((event) => {
+    unlockEvents.forEach((event) => {
       document.removeEventListener(event, unlockAudio, true);
     });
   };
 
-  ["touchstart", "touchend", "click", "keydown"].forEach((event) => {
+  unlockEvents.forEach((event) => {
     document.addEventListener(event, unlockAudio, true);
   });
-
-  return sound;
 }
+
+setupAudioUnlock();
 
 export function renderLevel(n, container) {
   container.innerHTML = "";
 
-  initAudio();
+  if (!audioUnlocked) {
+    setupAudioUnlock();
+  }
 
-  const sound = new Howl({
+  if (backgroundSound) {
+    backgroundSound.stop();
+    backgroundSound = null;
+  }
+
+  backgroundSound = new Howl({
     src: [`/src/assets/sounds/level${n}.mp3`],
     loop: true,
     html5: true,
@@ -64,7 +75,9 @@ export function renderLevel(n, container) {
     },
   });
 
-  setupMobileAudio(sound);
+  if (audioUnlocked) {
+    backgroundSound.play();
+  }
 
   const header = document.createElement("div");
   header.className = "flex justify-between items-center mb-4";
@@ -73,11 +86,13 @@ export function renderLevel(n, container) {
     <div>
       <button id="restartBtn" class="text-black hover:text-white bg-yellow-400 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Restart</button>
       <button id="backBtn" class="text-black hover:text-white bg-gray-200 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Back</button>
+      <button id="soundBtn" class="text-black hover:text-white bg-blue-300 hover:bg-blue-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">🔊 Sound</button>
     </div>`;
   container.appendChild(header);
 
   const mainGameContainer = document.createElement("div");
-  mainGameContainer.className = "flex justify-center items-start gap-4 mb-4";
+  mainGameContainer.className =
+    "flex flex-col sm:flex-row justify-center items-center sm:items-start gap-4 mb-4";
   container.appendChild(mainGameContainer);
 
   const previewImg = document.createElement("img");
@@ -109,6 +124,19 @@ export function renderLevel(n, container) {
     }
   };
 
+  document.getElementById("soundBtn").addEventListener("click", () => {
+    initAudioForMobile();
+    if (backgroundSound) {
+      if (backgroundSound.playing()) {
+        backgroundSound.pause();
+        document.getElementById("soundBtn").textContent = "🔇 Sound";
+      } else {
+        backgroundSound.play();
+        document.getElementById("soundBtn").textContent = "🔊 Sound";
+      }
+    }
+  });
+
   grid.addEventListener("click", (e) => {
     const tile = e.target.closest("[data-idx]");
     if (!tile) return;
@@ -125,13 +153,14 @@ export function renderLevel(n, container) {
           html5: true,
         });
 
-        if (audioInitialized) {
+        if (audioUnlocked) {
           moveSound.play();
         } else {
-          setupMobileAudio(moveSound);
+          initAudioForMobile();
+          moveSound.play();
         }
       } catch (error) {
-        console.log("Move sound not available");
+        console.log("Move sound not available", error);
       }
 
       [tiles[idx], tiles[emptyIdx]] = [tiles[emptyIdx], tiles[idx]];
@@ -152,7 +181,10 @@ export function renderLevel(n, container) {
   });
 
   document.getElementById("backBtn").addEventListener("click", () => {
-    sound.stop();
+    if (backgroundSound) {
+      backgroundSound.stop();
+      backgroundSound = null;
+    }
     container.innerHTML = "";
 
     const lvlContainer = document.createElement("div");
@@ -165,7 +197,10 @@ export function renderLevel(n, container) {
   });
 
   function onSolved() {
-    sound.stop();
+    if (backgroundSound) {
+      backgroundSound.stop();
+      backgroundSound = null;
+    }
 
     const celebrationOverlay = document.createElement("div");
     celebrationOverlay.className =
@@ -189,6 +224,23 @@ export function renderLevel(n, container) {
     celebrationOverlay.appendChild(message);
     celebrationOverlay.appendChild(continueBtn);
     document.body.appendChild(celebrationOverlay);
+
+    try {
+      const victorySound = new Howl({
+        src: ["/src/assets/sounds/victory.mp3"],
+        volume: 0.7,
+        html5: true,
+      });
+
+      if (audioUnlocked) {
+        victorySound.play();
+      } else {
+        initAudioForMobile();
+        victorySound.play();
+      }
+    } catch (error) {
+      console.log("Victory sound not available");
+    }
 
     continueBtn.addEventListener("click", () => {
       document.body.removeChild(celebrationOverlay);
