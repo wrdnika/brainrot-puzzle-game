@@ -1,83 +1,311 @@
-import { Howl } from "howler";
+import { Howl, Howler } from "howler";
 import { unlockLevel } from "./storage.js";
 import { renderLevelList } from "./levelList.js";
 
 const SIZE = 3;
 const TILE_COUNT = SIZE * SIZE;
 
+// Audio management
 let backgroundSound = null;
+let audioContext = null;
 let audioUnlocked = false;
+let soundEnabled = true;
+let currentLevelSound = null; // Track current level sound
+let activeAudioSources = []; // Track all active sounds to properly clean up
 
-function initAudioForMobile() {
-  if (audioUnlocked) return;
-
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-  gainNode.gain.value = 0;
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  oscillator.start(0);
-  oscillator.stop(0.001);
-
-  if (audioContext.state === "suspended") {
-    audioContext.resume();
+// Create a single instance of AudioContext
+function getAudioContext() {
+  if (!audioContext) {
+    try {
+      window.AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioContext = new AudioContext();
+    } catch (e) {
+      console.error("AudioContext not supported:", e);
+    }
   }
-
-  audioUnlocked = true;
-  console.log("Audio unlocked for mobile!");
-
-  if (backgroundSound) {
-    backgroundSound.play();
-  }
+  return audioContext;
 }
 
-function setupAudioUnlock() {
-  const unlockEvents = ["touchstart", "touchend", "mousedown", "keydown"];
+// Force release all audio resources
+function releaseAllAudio() {
+  // Stop all active Howler sounds
+  Howler.stop();
 
-  const unlockAudio = () => {
-    initAudioForMobile();
+  // Clean up our tracked sounds
+  if (backgroundSound) {
+    backgroundSound.stop();
+    backgroundSound.unload();
+    backgroundSound = null;
+  }
 
-    unlockEvents.forEach((event) => {
-      document.removeEventListener(event, unlockAudio, true);
-    });
-  };
+  // Clear all active audio sources
+  activeAudioSources.forEach((sound) => {
+    if (sound && typeof sound.unload === "function") {
+      sound.stop();
+      sound.unload();
+    }
+  });
+  activeAudioSources = [];
 
-  unlockEvents.forEach((event) => {
-    document.addEventListener(event, unlockAudio, true);
+  // Reset current level sound
+  currentLevelSound = null;
+}
+
+// Aggressively unlock audio on mobile
+function unlockAudio() {
+  if (audioUnlocked) return Promise.resolve(true);
+
+  const ctx = getAudioContext();
+  if (!ctx) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    // First make sure context is resumed
+    const resumePromise =
+      ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
+
+    resumePromise
+      .then(() => {
+        // Create and play a silent buffer
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = 0.001; // Very quiet but not completely silent (helps on iOS)
+
+        source.buffer = buffer;
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        // Play the empty sound
+        if (typeof source.start === "function") {
+          source.start(0);
+        } else {
+          source.noteOn(0);
+        }
+
+        // Also unlock Howler.js specifically
+        try {
+          Howler.ctx = ctx;
+          if (Howler._scratchBuffer) {
+            const unlockSource = ctx.createBufferSource();
+            unlockSource.buffer = Howler._scratchBuffer;
+            unlockSource.connect(ctx.destination);
+            unlockSource.start(0);
+          }
+        } catch (e) {
+          console.warn("Howler unlock failed:", e);
+        }
+
+        // Confirm audio is unlocked
+        audioUnlocked = true;
+        console.log("Audio context unlocked:", ctx.state);
+        resolve(true);
+      })
+      .catch((err) => {
+        console.error("Failed to resume AudioContext:", err);
+        resolve(false);
+      });
   });
 }
 
-setupAudioUnlock();
+// Setup multiple event listeners for audio unlocking
+function setupAudioUnlock() {
+  if (audioUnlocked) return;
+
+  // Comprehensive list of events that might unlock audio
+  const unlockEvents = [
+    "touchstart",
+    "touchend",
+    "mousedown",
+    "mouseup",
+    "click",
+    "keydown",
+    "focus",
+    "visibilitychange",
+  ];
+
+  const unlockHandler = async () => {
+    const success = await unlockAudio();
+
+    if (success) {
+      console.log("Audio system fully unlocked for mobile!");
+
+      // Remove all event listeners once audio is unlocked
+      unlockEvents.forEach((event) => {
+        document.removeEventListener(event, unlockHandler, true);
+        document.body.removeEventListener(event, unlockHandler, true);
+        window.removeEventListener(event, unlockHandler, true);
+      });
+
+      // Start background sound if it exists and should be playing
+      if (currentLevelSound && soundEnabled) {
+        try {
+          startBackgroundMusic(currentLevelSound);
+        } catch (e) {
+          console.error("Error starting background sound:", e);
+        }
+      }
+    }
+  };
+
+  // Add listeners to document, body, and window for maximum coverage
+  unlockEvents.forEach((event) => {
+    document.addEventListener(event, unlockHandler, true);
+    document.body.addEventListener(event, unlockHandler, true);
+    window.addEventListener(event, unlockHandler, true);
+  });
+}
+
+// Create and manage a sound with better error handling and resource tracking
+function createSound(src, options = {}) {
+  // Ensure the file path is correct and absolute
+  if (!src.startsWith("/")) {
+    src = "/" + src;
+  }
+
+  const defaultOptions = {
+    src: [src],
+    html5: true, // Use HTML5 Audio for better mobile compatibility
+    preload: true,
+    volume: options.volume || 0.7,
+    format: ["mp3"],
+    onloaderror: function (id, err) {
+      console.error(`Sound loading error for ${src}:`, err);
+    },
+    onplayerror: function (id, err) {
+      console.error(`Sound play error for ${src}:`, err);
+
+      // Try to recover by unlocking audio again
+      unlockAudio().then(() => {
+        if (this.state() === "loaded") {
+          this.play();
+        }
+      });
+    },
+  };
+
+  // Merge options
+  const soundOptions = { ...defaultOptions, ...options };
+
+  try {
+    const sound = new Howl(soundOptions);
+
+    // Track this sound for cleanup
+    activeAudioSources.push(sound);
+
+    return sound;
+  } catch (e) {
+    console.error("Failed to create sound:", e);
+    return null;
+  }
+}
+
+// Safely play a sound with unlocking attempt
+function playSound(sound) {
+  if (!sound || !soundEnabled) return;
+
+  // Ensure audio is unlocked first
+  unlockAudio().then((success) => {
+    if (success && sound) {
+      try {
+        // For iOS, we create a user gesture triggered playback
+        const playPromise = sound.play();
+
+        if (playPromise && typeof playPromise.then === "function") {
+          playPromise.catch((err) => {
+            console.warn("Sound play promise rejected:", err);
+
+            // Try one more time with delay
+            setTimeout(() => {
+              unlockAudio().then(() => sound.play());
+            }, 100);
+          });
+        }
+      } catch (e) {
+        console.error("Error playing sound:", e);
+      }
+    }
+  });
+}
+
+// Special function for background music to ensure it loops properly
+function startBackgroundMusic(levelNumber) {
+  // Clean up previous background sound
+  if (backgroundSound) {
+    backgroundSound.stop();
+    backgroundSound.unload();
+    backgroundSound = null;
+  }
+
+  // Store current level for reference
+  currentLevelSound = levelNumber;
+
+  // Create and configure background sound
+  backgroundSound = createSound(`/src/assets/sounds/level${levelNumber}.mp3`, {
+    loop: true,
+    volume: 0.8,
+    html5: true,
+    onend: function () {
+      // Double-check loop is working - manually restart if needed
+      if (backgroundSound && !backgroundSound.playing() && soundEnabled) {
+        console.log("Background music ended - manually restarting");
+        backgroundSound.play();
+      }
+    },
+  });
+
+  // Add a watchdog timer to ensure looping works
+  if (backgroundSound) {
+    backgroundSound._watchdogInterval = setInterval(() => {
+      if (backgroundSound && soundEnabled && !backgroundSound.playing()) {
+        console.log("Watchdog detected stopped background music - restarting");
+        backgroundSound.play();
+      }
+    }, 2000);
+
+    // Play with delay to ensure loading is complete
+    setTimeout(() => {
+      if (audioUnlocked && soundEnabled && backgroundSound) {
+        backgroundSound.play();
+      }
+    }, 200);
+  }
+}
+
+// Initialize audio system
+function initAudio() {
+  // Try to unlock audio immediately
+  unlockAudio();
+
+  // Setup event listeners for later unlocking if needed
+  setupAudioUnlock();
+
+  // Setup visibility change handling for background/foreground transitions
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      // Page is now visible - resume audio if needed
+      unlockAudio().then(() => {
+        if (backgroundSound && soundEnabled && !backgroundSound.playing()) {
+          backgroundSound.play();
+        }
+      });
+    }
+  });
+}
+
+// Call initialization on module load
+initAudio();
 
 export function renderLevel(n, container) {
   container.innerHTML = "";
 
-  if (!audioUnlocked) {
-    setupAudioUnlock();
-  }
+  // Force cleanup of all audio resources from previous level
+  releaseAllAudio();
 
-  if (backgroundSound) {
-    backgroundSound.stop();
-    backgroundSound = null;
-  }
+  // Try to unlock audio
+  initAudio();
 
-  backgroundSound = new Howl({
-    src: [`/src/assets/sounds/level${n}.mp3`],
-    loop: true,
-    html5: true,
-    preload: true,
-    volume: 0.8,
-    onloaderror: function (id, err) {
-      console.error(`Sound loading error: ${err}`);
-    },
-  });
-
-  if (audioUnlocked) {
-    backgroundSound.play();
-  }
+  // Start background music for this level
+  startBackgroundMusic(n);
 
   const header = document.createElement("div");
   header.className = "flex justify-between items-center mb-4";
@@ -86,7 +314,9 @@ export function renderLevel(n, container) {
     <div>
       <button id="restartBtn" class="text-black hover:text-white bg-yellow-400 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Restart</button>
       <button id="backBtn" class="text-black hover:text-white bg-gray-200 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">Back</button>
-      <button id="soundBtn" class="text-black hover:text-white bg-blue-300 hover:bg-blue-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">🔊 Sound</button>
+      <button id="soundBtn" class="text-black hover:text-white bg-blue-300 hover:bg-blue-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium items-center shadow hover:shadow-lg">${
+        soundEnabled ? "🔊 Sound" : "🔇 Sound"
+      }</button>
     </div>`;
   container.appendChild(header);
 
@@ -124,19 +354,33 @@ export function renderLevel(n, container) {
     }
   };
 
+  // Sound toggle button with improved handling
   document.getElementById("soundBtn").addEventListener("click", () => {
-    initAudioForMobile();
-    if (backgroundSound) {
-      if (backgroundSound.playing()) {
-        backgroundSound.pause();
-        document.getElementById("soundBtn").textContent = "🔇 Sound";
-      } else {
-        backgroundSound.play();
+    // First try to unlock audio
+    unlockAudio().then(() => {
+      soundEnabled = !soundEnabled;
+
+      if (soundEnabled) {
         document.getElementById("soundBtn").textContent = "🔊 Sound";
+        if (backgroundSound && !backgroundSound.playing()) {
+          backgroundSound.play();
+        } else if (!backgroundSound) {
+          // Recreate background sound if it was unloaded
+          startBackgroundMusic(n);
+        }
+      } else {
+        document.getElementById("soundBtn").textContent = "🔇 Sound";
+        if (backgroundSound) {
+          backgroundSound.pause();
+        }
       }
-    }
+    });
   });
 
+  // Pre-create the move sound to avoid delays
+  const moveSound = createSound("/src/assets/sounds/move.mp3", { volume: 0.5 });
+
+  // Tile movement handling
   grid.addEventListener("click", (e) => {
     const tile = e.target.closest("[data-idx]");
     if (!tile) return;
@@ -146,26 +390,18 @@ export function renderLevel(n, container) {
 
     const emptyIdx = tiles.indexOf(0);
     if (isNeighbor(idx, emptyIdx)) {
-      try {
-        const moveSound = new Howl({
-          src: ["/src/assets/sounds/move.mp3"],
-          volume: 0.5,
-          html5: true,
-        });
-
-        if (audioUnlocked) {
-          moveSound.play();
-        } else {
-          initAudioForMobile();
-          moveSound.play();
-        }
-      } catch (error) {
-        console.log("Move sound not available", error);
+      // Play move sound - reuse the pre-created sound
+      if (moveSound) {
+        // Clone the sound to allow overlapping playback
+        moveSound.stop();
+        playSound(moveSound);
       }
 
+      // Update tiles
       [tiles[idx], tiles[emptyIdx]] = [tiles[emptyIdx], tiles[idx]];
       renderImageTiles(tiles, grid, fullImage, n);
 
+      // Check if puzzle is solved
       if (isSolved(tiles)) onSolved();
     }
   });
@@ -181,10 +417,9 @@ export function renderLevel(n, container) {
   });
 
   document.getElementById("backBtn").addEventListener("click", () => {
-    if (backgroundSound) {
-      backgroundSound.stop();
-      backgroundSound = null;
-    }
+    // Clean up all audio resources properly
+    releaseAllAudio();
+
     container.innerHTML = "";
 
     const lvlContainer = document.createElement("div");
@@ -197,10 +432,8 @@ export function renderLevel(n, container) {
   });
 
   function onSolved() {
-    if (backgroundSound) {
-      backgroundSound.stop();
-      backgroundSound = null;
-    }
+    // Clean up audio resources
+    releaseAllAudio();
 
     const celebrationOverlay = document.createElement("div");
     celebrationOverlay.className =
@@ -225,22 +458,20 @@ export function renderLevel(n, container) {
     celebrationOverlay.appendChild(continueBtn);
     document.body.appendChild(celebrationOverlay);
 
-    try {
-      const victorySound = new Howl({
-        src: ["/src/assets/sounds/victory.mp3"],
-        volume: 0.7,
-        html5: true,
-      });
+    // Play victory sound with reliable playback
+    const victorySound = createSound("/src/assets/sounds/victory.mp3", {
+      volume: 0.7,
+      onend: function () {
+        // Remove this sound from active tracking when it's done
+        const index = activeAudioSources.indexOf(this);
+        if (index >= 0) {
+          activeAudioSources.splice(index, 1);
+        }
+      },
+    });
 
-      if (audioUnlocked) {
-        victorySound.play();
-      } else {
-        initAudioForMobile();
-        victorySound.play();
-      }
-    } catch (error) {
-      console.log("Victory sound not available");
-    }
+    // Use timeout to ensure audio context is ready
+    setTimeout(() => playSound(victorySound), 100);
 
     continueBtn.addEventListener("click", () => {
       document.body.removeChild(celebrationOverlay);
