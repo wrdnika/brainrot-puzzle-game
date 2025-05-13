@@ -167,7 +167,7 @@ export function renderLevel(n, container) {
 
     if (soundEnabled) {
       const victorySound = new Howl({
-        src: ["/src/assets/sounds/victory.mp3"],
+        src: ["/sounds/victory.mp3"],
         volume: 0.7,
       });
       victorySound.play();
