@@ -10,172 +10,188 @@ function initializeApp() {
   app.innerHTML = "";
 
   const appContainer = document.createElement("div");
-  appContainer.className =
-    "min-h-screen bg-gradient-to-br from-gray-500 to-gray-900 transition-all duration-500";
+  appContainer.className = "min-h-screen flex flex-col";
   app.appendChild(appContainer);
 
-  const header = createHeader();
-  appContainer.appendChild(header);
+  appContainer.appendChild(createHeader());
 
   const mainContent = document.createElement("div");
   mainContent.id = "main-content";
-  mainContent.className = "container mx-auto px-4 py-6 fade-in";
+  mainContent.className = "container mx-auto px-4 py-8 fade-in flex-1";
   appContainer.appendChild(mainContent);
 
-  const footer = createFooter();
-  appContainer.appendChild(footer);
+  appContainer.appendChild(createFooter());
 
   handleRouting(mainContent);
 
-  document.body.classList.add("transition-opacity", "duration-700");
-  setTimeout(() => {
-    document.body.classList.add("opacity-100");
-  }, 100);
-
-  return mainContent;
+  document.body.classList.add("transition-opacity", "duration-500");
+  setTimeout(() => document.body.classList.add("opacity-100"), 80);
 }
 
 function createHeader() {
   const header = document.createElement("header");
-  header.className =
-    "bg-gradient-to-r from-gray-400 to-black-400 shadow-lg backdrop-blur-sm transition-all duration-300 sticky top-0 z-50";
+  header.className = "sticky top-0 z-50";
+  header.style.cssText = `
+    background: rgba(4, 13, 26, 0.85);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(37, 99, 235, 0.18);
+    box-shadow: 0 2px 20px rgba(0,0,0,0.5);
+  `;
 
-  const headerContent = document.createElement("div");
-  headerContent.className =
-    "container mx-auto px-2 py-2 flex justify-between items-center";
+  // Top accent line
+  const accentLine = document.createElement("div");
+  accentLine.style.cssText = `
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, #1a4080 15%, #2563eb 40%, #60a5fa 50%, #2563eb 60%, #1a4080 85%, transparent 100%);
+    opacity: 0.8;
+  `;
+  header.appendChild(accentLine);
 
+  const inner = document.createElement("div");
+  inner.className = "container mx-auto px-4 py-3 flex justify-between items-center";
+
+  // Logo
   const logoArea = document.createElement("div");
-  logoArea.className = "flex items-center group cursor-pointer";
-  logoArea.addEventListener("click", () => {
-    window.location.hash = "";
+  logoArea.className = "flex items-center gap-3 cursor-pointer";
+  logoArea.addEventListener("click", () => { window.location.hash = ""; });
+
+  const logoBox = document.createElement("div");
+  logoBox.style.cssText = `
+    width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    background: rgba(37, 99, 235, 0.15);
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    transition: all 0.2s ease;
+  `;
+  logoArea.addEventListener("mouseenter", () => {
+    logoBox.style.background = "rgba(37, 99, 235, 0.25)";
+    logoBox.style.borderColor = "rgba(59, 130, 246, 0.6)";
+    logoBox.style.boxShadow = "0 0 14px rgba(37,99,235,0.3)";
+  });
+  logoArea.addEventListener("mouseleave", () => {
+    logoBox.style.background = "rgba(37, 99, 235, 0.15)";
+    logoBox.style.borderColor = "rgba(37,99,235,0.35)";
+    logoBox.style.boxShadow = "none";
   });
 
-  const logo = document.createElement("img");
-  logo.className =
-    "h-10 w-10 mr-3 group-hover:scale-110 transition-transform duration-300";
-  logo.src = "/logo.png";
-  logo.alt = GAME_TITLE;
+  // const logo = document.createElement("img");
+  // logo.src = "/logo.png";
+  // logo.alt = GAME_TITLE;
+  // logo.style.cssText = "width: 24px; height: 24px; object-fit: contain;";
+  // logoBox.appendChild(logo);
+  // logoArea.appendChild(logoBox);
+
+  const titleWrap = document.createElement("div");
 
   const title = document.createElement("h1");
-  title.className = "text-2xl font-extrabold text-white tracking-wider";
-  title.innerHTML = `<span class="bg-clip-text text-transparent bg-white">${GAME_TITLE}</span>`;
+  title.className = "font-display text-gradient leading-none";
+  title.style.cssText = "font-size: 1.15rem; font-weight: 700; letter-spacing: 0.03em;";
+  title.textContent = GAME_TITLE;
+  titleWrap.appendChild(title);
 
-  logoArea.appendChild(logo);
-  logoArea.appendChild(title);
+  const sub = document.createElement("div");
+  sub.style.cssText = "font-size: 0.58rem; letter-spacing: 0.18em; color: var(--text-muted); text-transform: uppercase; margin-top: 1px;";
+  sub.textContent = "image puzzle";
+  titleWrap.appendChild(sub);
 
+  logoArea.appendChild(titleWrap);
+
+  // Action buttons
   const nav = document.createElement("nav");
-  nav.className = "flex space-x-3";
+  nav.className = "flex items-center gap-2";
 
-  const resetLink = document.createElement("button");
-  resetLink.className =
-    "text-black hover:text-white bg-gray-200 hover:bg-gray-400 transition-all px-4 py-2 rounded-2xl text-sm font-medium flex items-center shadow hover:shadow-lg";
-  resetLink.innerHTML = `
-    <i class="fa-solid fa-rotate mr-2"></i>
-    Reset Progress
-  `;
-  resetLink.addEventListener("click", () => {
-    if (confirm("Are you sure you want to reset all game progress?")) {
+  const resetBtn = document.createElement("button");
+  resetBtn.className = "btn btn-danger";
+  resetBtn.innerHTML = `<i class="fa-solid fa-rotate-left"></i><span class="hidden sm:inline">Reset Progress</span>`;
+  resetBtn.addEventListener("click", () => {
+    if (confirm("Reset semua progress game?")) {
       localStorage.removeItem("puzzle_progress");
       window.location.hash = "";
       location.reload();
     }
   });
+  nav.appendChild(resetBtn);
 
-  nav.appendChild(resetLink);
-
-  headerContent.appendChild(logoArea);
-  headerContent.appendChild(nav);
-  header.appendChild(headerContent);
-
+  inner.appendChild(logoArea);
+  inner.appendChild(nav);
+  header.appendChild(inner);
   return header;
 }
 
 function createFooter() {
   const footer = document.createElement("footer");
-  footer.className = "bg-gray-600 text-white py-6 mt-auto";
-
-  const footerContent = document.createElement("div");
-  footerContent.className =
-    "container mx-auto px-6 flex flex-col md:flex-row justify-between items-center";
-
-  const copyright = document.createElement("div");
-  copyright.className = "mb-6 md:mb-0 text-center md:text-left";
-  copyright.innerHTML = `
-    <p class="text-xl font-bold bg-clip-text text-transparent bg-white">${GAME_TITLE}</p>
-    <p class="text-sm text-white mt-2">Version <small><small>${GAME_VERSION}</small></small> &copy; ${new Date().getFullYear()}</p>
-    <p class="text-xs text-white mt-2">All image rights belong to their respective owners</p>
+  footer.style.cssText = `
+    background: var(--blue-900);
+    border-top: 1px solid var(--border-faint);
+    padding: 1.25rem 0;
   `;
 
-  const links = document.createElement("div");
-  links.className = "flex space-x-8";
+  const inner = document.createElement("div");
+  inner.className = "container mx-auto px-6 flex flex-col sm:flex-row justify-between items-center gap-3";
 
-  const socialLinks = [
-    {
-      name: "GitHub",
-      icon: "fa-brands fa-github",
-      url: "https://github.com/wrdnika",
-    },
-    {
-      name: "Instagram",
-      icon: "fa-brands fa-instagram",
-      url: "https://www.instagram.com/wrdnika",
-    },
-    {
-      name: "TikTok",
-      icon: "fa-brands fa-tiktok",
-      url: "https://www.tiktok.com/@wrdnika.dev",
-    },
+  const left = document.createElement("div");
+  left.innerHTML = `
+    <p class="font-display font-semibold" style="color:var(--text-primary);font-size:0.9rem;">${GAME_TITLE}</p>
+    <p style="font-size:0.68rem;color:var(--text-muted);margin-top:3px;letter-spacing:0.04em;">
+      v${GAME_VERSION} &copy; ${new Date().getFullYear()} &nbsp;&middot;&nbsp; All image rights belong to their respective owners
+    </p>
+  `;
+
+  const socials = document.createElement("div");
+  socials.className = "flex items-center gap-5";
+
+  const links = [
+    { name: "GitHub", icon: "fa-brands fa-github", url: "https://github.com/wrdnika" },
+    { name: "Instagram", icon: "fa-brands fa-instagram", url: "https://www.instagram.com/wrdnika" },
+    { name: "TikTok", icon: "fa-brands fa-tiktok", url: "https://www.tiktok.com/@wrdnika.dev" },
   ];
 
-  socialLinks.forEach((item) => {
-    const link = document.createElement("a");
-    link.href = item.url;
-    link.className =
-      "text-white hover:text-blue-200 transition-colors transform hover:scale-125 duration-300";
-    link.setAttribute("aria-label", item.name);
-    link.innerHTML = `
-      <i class="${item.icon} text-xl"></i>
-    `;
-    links.appendChild(link);
+  links.forEach((item) => {
+    const a = document.createElement("a");
+    a.href = item.url;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.setAttribute("aria-label", item.name);
+    a.style.cssText = "color:var(--text-muted);font-size:1rem;transition:all 0.2s ease;";
+    a.innerHTML = `<i class="${item.icon}"></i>`;
+    a.addEventListener("mouseenter", () => {
+      a.style.color = "var(--blue-200)";
+      a.style.transform = "translateY(-2px)";
+    });
+    a.addEventListener("mouseleave", () => {
+      a.style.color = "var(--text-muted)";
+      a.style.transform = "";
+    });
+    socials.appendChild(a);
   });
 
-  footerContent.appendChild(copyright);
-  footerContent.appendChild(links);
-  footer.appendChild(footerContent);
-
+  inner.appendChild(left);
+  inner.appendChild(socials);
+  footer.appendChild(inner);
   return footer;
 }
 
 function pageTransition(callback) {
-  const mainContent = document.getElementById("main-content");
-  mainContent.classList.add(
-    "opacity-0",
-    "transform",
-    "scale-95",
-    "transition-all",
-    "duration-500"
-  );
-
+  const mc = document.getElementById("main-content");
+  mc.style.cssText = "opacity:0;transform:translateY(10px);transition:all 0.3s ease;";
   setTimeout(() => {
     callback();
     setTimeout(() => {
-      mainContent.classList.remove("opacity-0", "scale-95");
-      mainContent.classList.add("scale-100");
-    }, 50);
-  }, 500);
+      mc.style.cssText = "opacity:1;transform:none;transition:all 0.3s ease;";
+    }, 40);
+  }, 300);
 }
 
 function handleRouting(contentContainer) {
   const route = () => {
     const match = window.location.hash.match(/level-(\d+)/);
-
     pageTransition(() => {
       if (match) {
         renderLevel(Number(match[1]), contentContainer);
       } else {
         contentContainer.innerHTML = "";
         const lvlContainer = document.createElement("div");
-        lvlContainer.className = "max-w-6xl mx-auto";
+        lvlContainer.className = "max-w-5xl mx-auto";
         contentContainer.appendChild(lvlContainer);
         renderLevelList(lvlContainer);
       }
@@ -183,7 +199,6 @@ function handleRouting(contentContainer) {
   };
 
   route();
-
   window.removeEventListener("hashchange", route);
   window.addEventListener("hashchange", route);
 }
@@ -193,16 +208,12 @@ document.body.classList.add("opacity-0");
 function loadFontAwesome() {
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href =
-    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css";
+  link.href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css";
   document.head.appendChild(link);
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => {
-    loadFontAwesome();
-    initializeApp();
-  });
+  document.addEventListener("DOMContentLoaded", () => { loadFontAwesome(); initializeApp(); });
 } else {
   loadFontAwesome();
   initializeApp();

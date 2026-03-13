@@ -1,14 +1,39 @@
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
+/* ─── Blue Monochrome Palette ────────────────────────────── */
 :root {
-  --animation-duration: 0.5s;
-  --primary-color: #3b82f6;
-  --primary-dark: #1d4ed8;
-  --accent-color: #60a5fa;
-  --background-dark: #111827;
-  --background-darker: #000000;
-  --text-light: #f3f4f6;
-  --text-dim: #9ca3af;
+  --animation-duration: 0.4s;
+
+  /* Blues */
+  --blue-950:  #040d1a;
+  --blue-900:  #070f20;
+  --blue-800:  #0b1730;
+  --blue-700:  #0f2040;
+  --blue-600:  #153060;
+  --blue-500:  #1a4080;
+  --blue-400:  #2563eb;
+  --blue-300:  #3b82f6;
+  --blue-200:  #60a5fa;
+  --blue-100:  #bfdbfe;
+  --blue-50:   #eff6ff;
+
+  /* Aliases */
+  --bg-base:     var(--blue-950);
+  --bg-surface:  var(--blue-900);
+  --bg-card:     var(--blue-800);
+  --bg-card-2:   var(--blue-700);
+
+  --accent:      var(--blue-400);
+  --accent-light: var(--blue-300);
+  --accent-dim:  var(--blue-500);
+
+  --text-primary:   #f0f7ff;
+  --text-secondary: #93b4d0;
+  --text-muted:     #4a6580;
+
+  --border-strong: rgba(37, 99, 235, 0.45);
+  --border-subtle: rgba(37, 99, 235, 0.15);
+  --border-faint:  rgba(37, 99, 235, 0.07);
 }
 
 @tailwind base;
@@ -17,124 +42,168 @@
 
 @layer base {
   html {
-    font-family: "Montserrat", sans-serif;
+    font-family: "Inter", sans-serif;
     scroll-behavior: smooth;
   }
 
   body {
-    @apply antialiased text-gray-100;
-    background-color: var(--background-dark);
+    @apply antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    min-height: 100vh;
   }
 }
 
 @layer components {
   .btn {
-    @apply px-6 py-2.5 rounded-xl font-medium shadow-md transition-all duration-300 transform hover:translate-y-[-2px] focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply relative inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200;
+    font-family: "Inter", sans-serif;
+    letter-spacing: 0.01em;
   }
+  .btn:active { transform: scale(0.96); }
 
+  /* Primary blue button */
   .btn-primary {
-    @apply bg-gradient-to-r from-blue-600 to-blue-800 text-white hover:from-blue-700 hover:to-blue-900 focus:ring-blue-500;
+    background: var(--blue-400);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3), 0 0 0 0 var(--blue-300);
+  }
+  .btn-primary:hover {
+    background: var(--blue-300);
+    box-shadow: 0 4px 16px rgba(37,99,235,0.4);
   }
 
-  .btn-secondary {
-    @apply bg-gray-800 text-gray-100 hover:bg-gray-700 focus:ring-blue-500;
+  /* Ghost / outlined */
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+  .btn-ghost:hover {
+    background: rgba(37,99,235,0.08);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
   }
 
+  /* Subtle filled */
+  .btn-muted {
+    background: rgba(37,99,235,0.1);
+    border: 1px solid var(--border-subtle);
+    color: var(--blue-200);
+  }
+  .btn-muted:hover {
+    background: rgba(37,99,235,0.18);
+    border-color: var(--border-strong);
+    color: #fff;
+  }
+
+  /* Danger (still in blue family - use a desaturated red is fine, but let's keep it muted) */
+  .btn-danger {
+    background: rgba(239,68,68,0.08);
+    border: 1px solid rgba(239,68,68,0.25);
+    color: #fca5a5;
+  }
+  .btn-danger:hover {
+    background: rgba(239,68,68,0.15);
+    border-color: rgba(239,68,68,0.5);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(239,68,68,0.2);
+  }
+
+  /* Card base */
   .card {
-    @apply bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700 transition-all duration-300 hover:shadow-blue-900/20 hover:shadow-xl;
+    background: var(--bg-card);
+    border: 1px solid var(--border-faint);
+    border-radius: 14px;
+    transition: all 0.25s ease;
+    overflow: hidden;
   }
-
-  .form-input {
-    @apply w-full px-4 py-2 rounded-lg border border-gray-700 bg-gray-900 text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200;
-  }
-}
-
-.fade-in {
-  animation: fadeIn var(--animation-duration) ease-in-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  .card:hover {
+    border-color: var(--border-strong);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(37,99,235,0.1);
+    transform: translateY(-3px);
   }
 }
 
-@keyframes glow {
-  0%,
-  100% {
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.8);
-  }
-}
-
+/* Surface / glass panel */
 .glass {
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(11, 23, 48, 0.75);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--border-subtle);
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  @apply font-bold;
+/* ─── Animations ───────────────────────────────────────── */
+.fade-in { animation: fadeUp var(--animation-duration) ease-out forwards; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-*:focus-visible {
-  @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900 rounded-md;
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-5px); }
 }
 
-.text-shadow {
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ─── Typography ────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 { @apply font-bold; }
+
+.font-display {
+  font-family: "Space Grotesk", sans-serif;
 }
 
 .text-gradient {
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-600;
+  background: linear-gradient(135deg, var(--blue-200), #fff 60%, var(--blue-100));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.glow-blue {
-  box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+.text-accent { color: var(--blue-300); }
+
+/* ─── Tile hover ─────────────────────────────────────────── */
+.tile-hover {
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+.tile-hover:hover {
+  transform: scale(1.04);
+  filter: brightness(1.12);
+  box-shadow: 0 0 8px rgba(59,130,246,0.5);
+  z-index: 5;
+  position: relative;
 }
 
-.glow-blue-animate {
-  animation: glow 2s infinite ease-in-out;
+/* ─── Puzzle grid gradient border ────────────────────────── */
+.puzzle-grid-wrap {
+  padding: 2px;
+  background: linear-gradient(135deg, var(--blue-400), var(--blue-600), var(--blue-400));
+  border-radius: 14px;
+}
+.puzzle-grid-inner {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 5px;
 }
 
-.hover-card {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+/* ─── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb {
+  background: var(--blue-600);
+  border-radius: 3px;
 }
+::-webkit-scrollbar-thumb:hover { background: var(--blue-400); }
 
-.hover-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.2),
-    0 10px 10px -5px rgba(59, 130, 246, 0.1);
-}
-
-button:active,
-.btn:active {
-  transform: scale(0.98);
-}
-
-img {
-  filter: brightness(0.95) contrast(1.05);
-}
-
-.border-accent {
-  border: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-.neon-blue {
-  color: #fff;
-  text-shadow: 0 0 5px rgba(59, 130, 246, 0.8), 0 0 10px rgba(59, 130, 246, 0.5),
-    0 0 15px rgba(59, 130, 246, 0.3);
+/* ─── Focus ─────────────────────────────────────────────── */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--blue-400), 0 0 0 4px rgba(37,99,235,0.2);
+  border-radius: 6px;
 }
